@@ -96,8 +96,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SP_SITE_URL = "https://caritasdiocesanademadrid.sharepoint.com/sites/obras";
-const SP_LIST_NAME = "ReservasDespachos";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoQDEN5cRP_vqqTufHPBSjcEXLe2gTWd1BUs9XswswA53XcaGV5Z2SHiiP_WunVSGS/exec";
 
 const DESPACHOS = [{id:2,label:"Despacho 2"},{id:4,label:"Despacho 4"},{id:5,label:"Despacho 5"}];
 
@@ -148,82 +147,53 @@ function isBlocked(despacho,slotIdx){
 }
 function profIndex(codigo){return PROFESIONALES.findIndex(p=>p.codigo===codigo)}
 
-async function spFetch(path,opts={}){
-  const url=`${SP_SITE_URL}/_api/${path}`;
-  const headers={'Accept':'application/json;odata=nometadata','Content-Type':'application/json;odata=nometadata',...opts.headers};
-  const res=await fetch(url,{...opts,headers,credentials:'include'});
-  if(!res.ok) throw new Error(`SP ${res.status}: ${res.statusText}`);
-  if(res.status===204) return null;
+async function apiGet(params){
+  const url=new URL(SCRIPT_URL);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.append(k,v));
+  const res=await fetch(url.toString());
+  if(!res.ok) throw new Error('Error '+res.status);
   return res.json();
 }
-async function getDigest(){
-  const data=await spFetch('contextinfo',{method:'POST'});
-  return data.FormDigestValue;
-}
-async function ensureList(){
-  try{await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')`);}
-  catch(e){
-    const digest=await getDigest();
-    await spFetch('web/lists',{method:'POST',headers:{'X-RequestDigest':digest},
-      body:JSON.stringify({Title:SP_LIST_NAME,BaseTemplate:100,Description:'Reservas de despachos CEDIA'})});
-    const cols=[
-      {FieldTypeKind:2,Title:'Despacho'},{FieldTypeKind:2,Title:'Fecha'},
-      {FieldTypeKind:1,Title:'SlotIndex'},{FieldTypeKind:2,Title:'HoraInicio'},
-      {FieldTypeKind:2,Title:'Profesional'},{FieldTypeKind:2,Title:'Persona'},
-      {FieldTypeKind:3,Title:'Observaciones'}
-    ];
-    for(const col of cols){
-      await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/fields`,{
-        method:'POST',headers:{'X-RequestDigest':await getDigest()},body:JSON.stringify(col)});
-    }
-  }
+async function apiPost(body){
+  const res=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(body)});
+  if(!res.ok) throw new Error('Error '+res.status);
+  return res.json();
 }
 async function loadWeek(){
   loading=true; renderGrid();
   const monday=fmtDate(currentMonday), friday=fmtDate(addDays(currentMonday,4));
   try{
-    const data=await spFetch(
-      `web/lists/getbytitle('${SP_LIST_NAME}')/items?`+
-      `$filter=Despacho eq '${currentDespacho}' and Fecha ge '${monday}' and Fecha le '${friday}'&`+
-      `$select=Id,Despacho,Fecha,SlotIndex,HoraInicio,Profesional,Persona,Observaciones&$top=500`);
+    const data=await apiGet({despacho:currentDespacho,monday,friday});
     bookings={};
-    (data.value||[]).forEach(item=>{
-      const key=`${item.Despacho}_${item.Fecha}_${item.SlotIndex}`;
-      bookings[key]={id:item.Id,prof:item.Profesional,persona:item.Persona,obs:item.Observaciones||'',hora:item.HoraInicio};
+    (data||[]).forEach(item=>{
+      const key=`${item.despacho}_${item.fecha}_${item.slotIndex}`;
+      bookings[key]={rowIndex:item.rowIndex,prof:item.profesional,persona:item.persona,obs:item.obs||'',hora:item.horaInicio};
     });
     hideError();
-  }catch(e){showError('No se pudo conectar con SharePoint. '+e.message);}
+  }catch(e){showError('No se pudo conectar con Google Sheets. '+e.message);}
   loading=false; renderGrid();
 }
 async function saveBooking(key,data){
   const parts=key.split('_');
   const horaInicio=timeStr(START+parseInt(parts[2])*SLOT);
   try{
-    const digest=await getDigest();
-    const result=await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items`,{
-      method:'POST',headers:{'X-RequestDigest':digest},
-      body:JSON.stringify({Despacho:parts[0],Fecha:parts[1],SlotIndex:parts[2],HoraInicio:horaInicio,Profesional:data.prof,Persona:data.persona,Observaciones:data.obs||''})});
-    bookings[key]={...data,id:result.Id,hora:horaInicio};
+    const result=await apiPost({action:'save',despacho:parts[0],fecha:parts[1],slotIndex:parts[2],horaInicio,profesional:data.prof,persona:data.persona,obs:data.obs||''});
+    bookings[key]={...data,rowIndex:result.rowIndex,hora:horaInicio};
     showToast('Cita guardada ✓');
   }catch(e){showError('Error al guardar: '+e.message);}
   closeModal(); renderGrid();
 }
-async function updateBooking(key,itemId,data){
+async function updateBooking(key,rowIndex,data){
   try{
-    const digest=await getDigest();
-    await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items(${itemId})`,{
-      method:'POST',headers:{'X-RequestDigest':digest,'X-HTTP-Method':'MERGE','IF-MATCH':'*'},
-      body:JSON.stringify({Profesional:data.prof,Persona:data.persona,Observaciones:data.obs||''})});
+    await apiPost({action:'update',rowIndex,profesional:data.prof,persona:data.persona,obs:data.obs||''});
     bookings[key]={...bookings[key],...data};
     showToast('Cita actualizada ✓');
   }catch(e){showError('Error al actualizar: '+e.message);}
   closeModal(); renderGrid();
 }
-async function deleteBooking(key,itemId){
+async function deleteBooking(key,rowIndex){
   try{
-    const digest=await getDigest();
-    await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items(${itemId})`,{
-      method:'POST',headers:{'X-RequestDigest':digest,'X-HTTP-Method':'DELETE','IF-MATCH':'*'}});
+    await apiPost({action:'delete',rowIndex});
     delete bookings[key];
     showToast('Cita eliminada');
   }catch(e){showError('Error al eliminar: '+e.message);}
@@ -309,9 +279,9 @@ function openEdit(key){
     <div class="fr"><label>Persona atendida</label><input type="text" id="m-persona" value="${esc(bk.persona||'')}"></div>
     <div class="fr"><label>Observaciones</label><textarea id="m-obs">${esc(bk.obs||'')}</textarea></div>
     <div class="btn-row">
-      <button class="btn btn-danger" onclick="handleDelete('${key}',${bk.id})">Eliminar</button>
+      <button class="btn btn-danger" onclick="handleDelete('${key}',${bk.rowIndex})">Eliminar</button>
       <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="handleUpdate('${key}',${bk.id})">Guardar</button>
+      <button class="btn btn-primary" onclick="handleUpdate('${key}',${bk.rowIndex})">Guardar</button>
     </div>`);
 }
 function handleSaveNew(key){
@@ -339,8 +309,8 @@ function esc(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/<
 
 (async()=>{
   render();
-  try{await ensureList();await loadWeek();}
-  catch(e){showError('Error de conexión con SharePoint. '+e.message);loading=false;renderGrid();}
+  try{await loadWeek();}
+  catch(e){showError('Error de conexión. '+e.message);loading=false;renderGrid();}
 })();
 </script>
 </body>
