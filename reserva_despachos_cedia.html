@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reserva de Despachos — CEDIA</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8f7f4;color:#1a1a1a;min-height:100vh;padding:1.5rem}
+  .app{max-width:960px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e0ddd6;overflow:hidden}
+  .hdr{padding:1.25rem 1.5rem;border-bottom:1px solid #e0ddd6;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
+  .hdr-left h1{font-size:16px;font-weight:600;color:#1a1a1a}
+  .hdr-left p{font-size:12px;color:#6b6860;margin-top:2px}
+  .nav{display:flex;align-items:center;gap:6px}
+  .nav button{background:#fff;border:1px solid #d4d1c8;border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;color:#1a1a1a;transition:background .15s}
+  .nav button:hover{background:#f0ede6}
+  .week-label{font-size:13px;font-weight:500;color:#3a3835;min-width:130px;text-align:center}
+  .body{padding:1rem 1.5rem 1.5rem}
+  .tabs{display:flex;gap:6px;margin-bottom:1rem}
+  .tab{padding:6px 16px;border-radius:8px;border:1px solid #e0ddd6;font-size:13px;cursor:pointer;background:#fff;color:#6b6860;transition:all .15s}
+  .tab.active{background:#1a3a5c;border-color:#1a3a5c;color:#fff;font-weight:500}
+  .grid-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{padding:7px 4px;text-align:center;font-weight:500;font-size:11px;color:#6b6860;border-bottom:1px solid #e0ddd6;white-space:nowrap}
+  th.tc{width:48px}
+  td{border:.5px solid #ece9e2;height:38px;vertical-align:middle;padding:2px 3px;transition:background .1s}
+  td.time{font-size:11px;color:#9e9b94;text-align:right;padding-right:8px;cursor:default;background:transparent;white-space:nowrap}
+  td.blocked{background:#f5f3ee;cursor:not-allowed;position:relative}
+  td.blocked::after{content:"descanso";font-size:9px;color:#b0ada6;position:absolute;bottom:3px;right:4px}
+  td.free{cursor:pointer}
+  td.free:hover{background:#e8f0fb}
+  td.booked{cursor:pointer;position:relative}
+  td.today-col{background:#fffbf0}
+  td.today-col.free:hover{background:#fff3c0}
+  .pill{display:block;padding:3px 6px;border-radius:4px;font-size:10px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.4}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+  .modal{background:#fff;border-radius:12px;border:1px solid #e0ddd6;padding:1.5rem;width:340px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+  .modal h3{font-size:15px;font-weight:600;margin-bottom:.25rem}
+  .modal-sub{font-size:12px;color:#6b6860;margin-bottom:1.25rem;padding-bottom:.75rem;border-bottom:1px solid #f0ede6}
+  .fr{margin-bottom:.875rem}
+  .fr label{display:block;font-size:12px;color:#6b6860;margin-bottom:4px;font-weight:500}
+  .fr input,.fr select,.fr textarea{width:100%;padding:8px 10px;font-size:13px;border:1px solid #d4d1c8;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;transition:border .15s}
+  .fr input:focus,.fr select:focus,.fr textarea:focus{border-color:#1a3a5c}
+  .fr textarea{resize:vertical;min-height:60px}
+  .btn-row{display:flex;gap:8px;margin-top:1.25rem}
+  .btn{flex:1;padding:9px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #d4d1c8;font-weight:500;transition:all .15s}
+  .btn-primary{background:#1a3a5c;color:#fff;border-color:#1a3a5c}
+  .btn-primary:hover{background:#0f2840}
+  .btn-danger{color:#a32d2d;border-color:#f0c0c0;background:#fff}
+  .btn-danger:hover{background:#fcebeb}
+  .btn-cancel{background:#fff;color:#6b6860}
+  .btn-cancel:hover{background:#f5f3ee}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:1rem;padding-top:.875rem;border-top:1px solid #f0ede6}
+  .li{display:flex;align-items:center;gap:5px;font-size:11px;color:#6b6860}
+  .ld{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1a3a5c;color:#fff;padding:.75rem 1.25rem;border-radius:8px;font-size:13px;z-index:2000;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.show{opacity:1}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid #d4d1c8;border-top-color:#1a3a5c;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-row td{text-align:center;padding:2rem;color:#9e9b94;font-size:12px}
+  .err-banner{background:#fcebeb;border:1px solid #f0c0c0;border-radius:8px;padding:.75rem 1rem;font-size:12px;color:#a32d2d;margin-bottom:1rem;display:none}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>Reserva de despachos</h1>
+      <p>CEDIA · Cáritas Madrid</p>
+    </div>
+    <div class="nav">
+      <button onclick="changeWeek(-1)">&#8592;</button>
+      <span class="week-label" id="wlabel"></span>
+      <button onclick="changeWeek(1)">&#8594;</button>
+      <button onclick="goToday()" style="font-size:11px;padding:5px 10px">hoy</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="err-banner" class="err-banner"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="grid-wrap"><table id="grid"></table></div>
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:#e8f0fb;border:1px solid #b5d4f4"></div>libre</div>
+      <div class="li"><div class="ld" style="background:#9fe1cb"></div>reservado</div>
+      <div class="li"><div class="ld" style="background:#f5f3ee;border:1px solid #e0ddd6"></div>no disponible</div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="overlay" style="display:none">
+  <div class="modal" id="modal-box"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN — edita estas dos líneas antes de desplegar
+// ============================================================
+const SP_SITE_URL = "https://TU_ORGANIZACION.sharepoint.com/sites/TU_SITIO";
+const SP_LIST_NAME = "ReservasDespachos";
+// ============================================================
+
+const DESPACHOS = [{id:2,label:"Despacho 2"},{id:4,label:"Despacho 4"},{id:5,label:"Despacho 5"}];
+const PROFESIONALES = ["Trabajador/a Social 1","Trabajador/a Social 2","Trabajador/a Social 3","Trabajador/a Social 4","Psicóloga"];
+const PCOLORS = [
+  {bg:"#B5D4F4",fg:"#0C447C"},
+  {bg:"#9FE1CB",fg:"#085041"},
+  {bg:"#FAC775",fg:"#633806"},
+  {bg:"#F4C0D1",fg:"#72243E"},
+  {bg:"#C0DD97",fg:"#27500A"}
+];
+const BLOCKED_5 = [{s:11*60+30,e:12*60+30},{s:15*60,e:16*60},{s:19*60,e:19*60+30}];
+const START=9*60, END=20*60, SLOT=45;
+const DAYS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
+const DAYS_SHORT=["lun","mar","mié","jue","vie"];
+
+let currentMonday = getMonday(new Date());
+let currentDespacho = 2;
+let bookings = {};
+let loading = false;
+
+// ---- Fecha helpers ----
+function getMonday(d){
+  const dt=new Date(d); const day=dt.getDay();
+  const diff=dt.getDate()-day+(day===0?-6:1);
+  dt.setDate(diff); dt.setHours(0,0,0,0); return dt;
+}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function fmtDate(d){return d.toISOString().split('T')[0]} // YYYY-MM-DD
+function fmtDisplay(d){return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})}
+function isToday(d){return fmtDate(d)===fmtDate(new Date())}
+function timeStr(m){return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`}
+
+function slotKey(despacho,dayIdx,slotIdx){
+  return `${despacho}_${fmtDate(addDays(currentMonday,dayIdx))}_${slotIdx}`;
+}
+
+function isBlocked(despacho,slotIdx){
+  if(despacho!==5) return false;
+  const sm=START+slotIdx*SLOT, em=sm+SLOT;
+  return BLOCKED_5.some(b=>sm<b.e&&em>b.s);
+}
+
+// ---- SharePoint REST API ----
+async function spFetch(path, opts={}){
+  const url = `${SP_SITE_URL}/_api/${path}`;
+  const headers = {
+    'Accept':'application/json;odata=nometadata',
+    'Content-Type':'application/json;odata=nometadata',
+    ...opts.headers
+  };
+  const res = await fetch(url, {...opts, headers, credentials:'include'});
+  if(!res.ok) throw new Error(`SP error ${res.status}: ${res.statusText}`);
+  if(res.status===204) return null;
+  return res.json();
+}
+
+async function getDigest(){
+  const data = await spFetch('contextinfo', {method:'POST'});
+  return data.FormDigestValue;
+}
+
+async function ensureList(){
+  // Comprueba si la lista existe; si no, la crea
+  try {
+    await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')`);
+  } catch(e) {
+    const digest = await getDigest();
+    await spFetch('web/lists', {
+      method:'POST',
+      headers:{'X-RequestDigest':digest},
+      body: JSON.stringify({
+        Title: SP_LIST_NAME,
+        BaseTemplate: 100,
+        Description: 'Reservas de despachos CEDIA'
+      })
+    });
+    // Añadir columnas necesarias
+    const cols = [
+      {FieldTypeKind:2, Title:'Despacho'},
+      {FieldTypeKind:2, Title:'Fecha'},
+      {FieldTypeKind:1, Title:'SlotIndex'},
+      {FieldTypeKind:2, Title:'HoraInicio'},
+      {FieldTypeKind:2, Title:'Profesional'},
+      {FieldTypeKind:2, Title:'Persona'},
+      {FieldTypeKind:3, Title:'Observaciones'}
+    ];
+    for(const col of cols){
+      await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/fields`, {
+        method:'POST',
+        headers:{'X-RequestDigest': await getDigest()},
+        body: JSON.stringify(col)
+      });
+    }
+  }
+}
+
+async function loadWeek(){
+  loading = true;
+  renderGrid();
+  const monday = fmtDate(currentMonday);
+  const friday = fmtDate(addDays(currentMonday,4));
+  try {
+    const data = await spFetch(
+      `web/lists/getbytitle('${SP_LIST_NAME}')/items?` +
+      `$filter=Despacho eq '${currentDespacho}' and Fecha ge '${monday}' and Fecha le '${friday}'&` +
+      `$select=Id,Despacho,Fecha,SlotIndex,HoraInicio,Profesional,Persona,Observaciones&$top=500`
+    );
+    bookings = {};
+    (data.value||[]).forEach(item=>{
+      const key = `${item.Despacho}_${item.Fecha}_${item.SlotIndex}`;
+      bookings[key] = {
+        id: item.Id,
+        prof: item.Profesional,
+        persona: item.Persona,
+        obs: item.Observaciones||'',
+        hora: item.HoraInicio
+      };
+    });
+    hideError();
+  } catch(e) {
+    showError('No se pudo conectar con SharePoint. Verifica la URL del sitio y que la lista existe. ' + e.message);
+  }
+  loading = false;
+  renderGrid();
+}
+
+async function saveBooking(key, data){
+  const parts = key.split('_');
+  const despacho = parts[0];
+  const fecha = parts[1];
+  const slotIdx = parseInt(parts[2]);
+  const horaInicio = timeStr(START + slotIdx*SLOT);
+  try {
+    const digest = await getDigest();
+    const body = JSON.stringify({
+      Despacho: despacho,
+      Fecha: fecha,
+      SlotIndex: String(slotIdx),
+      HoraInicio: horaInicio,
+      Profesional: data.prof,
+      Persona: data.persona,
+      Observaciones: data.obs||''
+    });
+    const result = await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items`, {
+      method:'POST',
+      headers:{'X-RequestDigest':digest},
+      body
+    });
+    bookings[key] = {...data, id: result.Id, hora: horaInicio};
+    showToast('Cita guardada');
+  } catch(e) {
+    showError('Error al guardar: ' + e.message);
+  }
+  closeModal(); renderGrid();
+}
+
+async function updateBooking(key, itemId, data){
+  try {
+    const digest = await getDigest();
+    await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items(${itemId})`, {
+      method:'POST',
+      headers:{
+        'X-RequestDigest':digest,
+        'X-HTTP-Method':'MERGE',
+        'IF-MATCH':'*'
+      },
+      body: JSON.stringify({
+        Profesional: data.prof,
+        Persona: data.persona,
+        Observaciones: data.obs||''
+      })
+    });
+    bookings[key] = {...bookings[key], ...data};
+    showToast('Cita actualizada');
+  } catch(e) {
+    showError('Error al actualizar: ' + e.message);
+  }
+  closeModal(); renderGrid();
+}
+
+async function deleteBooking(key, itemId){
+  try {
+    const digest = await getDigest();
+    await spFetch(`web/lists/getbytitle('${SP_LIST_NAME}')/items(${itemId})`, {
+      method:'POST',
+      headers:{
+        'X-RequestDigest':digest,
+        'X-HTTP-Method':'DELETE',
+        'IF-MATCH':'*'
+      }
+    });
+    delete bookings[key];
+    showToast('Cita eliminada');
+  } catch(e) {
+    showError('Error al eliminar: ' + e.message);
+  }
+  closeModal(); renderGrid();
+}
+
+// ---- Render ----
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = DESPACHOS.map(d=>
+    `<button class="tab${d.id===currentDespacho?' active':''}" onclick="setDespacho(${d.id})">${d.label}</button>`
+  ).join('');
+}
+
+function renderWeekLabel(){
+  const end = addDays(currentMonday,4);
+  document.getElementById('wlabel').textContent =
+    `${fmtDisplay(currentMonday)} – ${fmtDisplay(end)}`;
+}
+
+function renderGrid(){
+  const slots=[];
+  for(let m=START;m<END;m+=SLOT) slots.push(m);
+  const t = document.getElementById('grid');
+
+  if(loading){
+    t.innerHTML=`<tr><td colspan="6" class="loading-row"><span class="spinner"></span>Cargando citas...</td></tr>`;
+    return;
+  }
+
+  let html=`<tr><th class="tc"></th>`;
+  for(let i=0;i<5;i++){
+    const d=addDays(currentMonday,i);
+    const today=isToday(d)?'style="color:#1a3a5c;font-weight:600"':'';
+    html+=`<th ${today}>${DAYS_SHORT[i]}<br>${fmtDisplay(d)}</th>`;
+  }
+  html+=`</tr>`;
+
+  slots.forEach((m,si)=>{
+    html+=`<tr><td class="time">${timeStr(m)}</td>`;
+    for(let di=0;di<5;di++){
+      const d=addDays(currentMonday,di);
+      const todayClass=isToday(d)?' today-col':'';
+      const key=slotKey(currentDespacho,di,si);
+      const bk=bookings[key];
+      if(isBlocked(currentDespacho,si)){
+        html+=`<td class="blocked${todayClass}"></td>`;
+      } else if(bk){
+        const pi=PROFESIONALES.indexOf(bk.prof);
+        const c=PCOLORS[pi>=0?pi:0];
+        html+=`<td class="booked${todayClass}" onclick="openEdit('${key}')">
+          <span class="pill" style="background:${c.bg};color:${c.fg}">${shortName(bk.prof)}: ${bk.persona}</span>
+        </td>`;
+      } else {
+        html+=`<td class="free${todayClass}" onclick="openNew('${key}','${timeStr(m)}')"></td>`;
+      }
+    }
+    html+=`</tr>`;
+  });
+  t.innerHTML=html;
+}
+
+function shortName(p){
+  const parts=p.split(' ');
+  return parts[parts.length-1];
+}
+
+function render(){renderTabs();renderWeekLabel();renderGrid();}
+
+async function setDespacho(id){currentDespacho=id;bookings={};render();await loadWeek();}
+async function changeWeek(n){currentMonday=addDays(currentMonday,n*7);bookings={};render();await loadWeek();}
+async function goToday(){currentMonday=getMonday(new Date());bookings={};render();await loadWeek();}
+
+// ---- Modales ----
+function openNew(key,time){
+  const parts=key.split('_');
+  const [,fecha]=parts;
+  showModal(`
+    <h3>Nueva cita</h3>
+    <div class="modal-sub">Despacho ${currentDespacho} &nbsp;·&nbsp; ${fecha} &nbsp;·&nbsp; ${time} h &nbsp;(45 min)</div>
+    <div class="fr"><label>Profesional</label>
+      <select id="m-prof">${PROFESIONALES.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    <div class="fr"><label>Persona atendida</label>
+      <input type="text" id="m-persona" placeholder="Nombre o referencia" autocomplete="off"></div>
+    <div class="fr"><label>Observaciones (opcional)</label>
+      <textarea id="m-obs" placeholder=""></textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="handleSaveNew('${key}')">Guardar cita</button>
+    </div>
+  `);
+}
+
+function openEdit(key){
+  const bk=bookings[key];
+  const parts=key.split('_');
+  const [,fecha,si]=parts;
+  const hora=timeStr(START+parseInt(si)*SLOT);
+  showModal(`
+    <h3>Editar cita</h3>
+    <div class="modal-sub">Despacho ${currentDespacho} &nbsp;·&nbsp; ${fecha} &nbsp;·&nbsp; ${hora} h</div>
+    <div class="fr"><label>Profesional</label>
+      <select id="m-prof">${PROFESIONALES.map(p=>`<option${p===bk.prof?' selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="fr"><label>Persona atendida</label>
+      <input type="text" id="m-persona" value="${esc(bk.persona||'')}"></div>
+    <div class="fr"><label>Observaciones</label>
+      <textarea id="m-obs">${esc(bk.obs||'')}</textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="handleDelete('${key}',${bk.id})">Eliminar</button>
+      <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="handleUpdate('${key}',${bk.id})">Guardar</button>
+    </div>
+  `);
+}
+
+function handleSaveNew(key){
+  const prof=document.getElementById('m-prof').value;
+  const persona=document.getElementById('m-persona').value.trim();
+  const obs=document.getElementById('m-obs').value.trim();
+  if(!persona){document.getElementById('m-persona').style.borderColor='#e24b4a';return;}
+  saveBooking(key,{prof,persona,obs});
+}
+
+function handleUpdate(key,id){
+  const prof=document.getElementById('m-prof').value;
+  const persona=document.getElementById('m-persona').value.trim();
+  const obs=document.getElementById('m-obs').value.trim();
+  if(!persona){document.getElementById('m-persona').style.borderColor='#e24b4a';return;}
+  updateBooking(key,id,{prof,persona,obs});
+}
+
+function handleDelete(key,id){
+  if(confirm('¿Eliminar esta cita?')) deleteBooking(key,id);
+}
+
+function showModal(html){
+  document.getElementById('modal-box').innerHTML=html;
+  document.getElementById('overlay').style.display='flex';
+}
+function closeModal(){document.getElementById('overlay').style.display='none';}
+document.getElementById('overlay').addEventListener('click',e=>{if(e.target===document.getElementById('overlay'))closeModal();});
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function showError(msg){
+  const b=document.getElementById('err-banner');
+  b.textContent=msg; b.style.display='block';
+}
+function hideError(){
+  document.getElementById('err-banner').style.display='none';
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+// ---- Inicio ----
+(async()=>{
+  render();
+  try {
+    await ensureList();
+    await loadWeek();
+  } catch(e) {
+    showError('Error de conexión con SharePoint. Edita SP_SITE_URL en el código. ' + e.message);
+    loading=false; renderGrid();
+  }
+})();
+</script>
+</body>
+</html>
