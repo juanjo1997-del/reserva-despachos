@@ -27,7 +27,7 @@
   td{border:1px solid #bbb;height:40px;vertical-align:middle;padding:3px 4px;transition:background .1s}
   td.time{font-size:11px;font-weight:700;color:#444;text-align:right;padding-right:8px;cursor:default;background:#f7f5f0;border-right:2px solid #111;white-space:nowrap}
   td.blocked{background:#e8e4dc;cursor:not-allowed;position:relative;border:1px solid #bbb}
-  td.blocked::after{content:"descanso";font-size:9px;font-weight:600;color:#888;position:absolute;bottom:3px;right:5px;text-transform:uppercase;letter-spacing:.3px}
+  td.blocked::after{content:attr(data-label);font-size:9px;font-weight:600;color:#888;position:absolute;bottom:3px;right:5px;text-transform:uppercase;letter-spacing:.3px}
   td.free{cursor:pointer;background:#fff}
   td.free:hover{background:#ddeeff;border-color:#1a3a5c}
   td.booked{cursor:pointer;position:relative}
@@ -107,7 +107,8 @@ const PROFESIONALES = [
   {nombre:"Javier Ródenas",        codigo:"DIR2"},
   {nombre:"Raquel Martín",         codigo:"TS3"},
   {nombre:"Jorge Puente",          codigo:"TF1"},
-  {nombre:"Lorena Chacón",         codigo:"TF2"}
+  {nombre:"Lorena Chacón",         codigo:"TF2"},
+  {nombre:"Otros",                  codigo:"OTROS"}
 ];
 
 const PCOLORS = [
@@ -117,12 +118,13 @@ const PCOLORS = [
   {bg:"#F4C0D1",fg:"#6b1a2e"},
   {bg:"#C0DD97",fg:"#254800"},
   {bg:"#D4BBEF",fg:"#3d1470"},
-  {bg:"#F9D49B",fg:"#5a3800"}
+  {bg:"#F9D49B",fg:"#5a3800"},
+  {bg:"#E0E0E0",fg:"#333333"}
 ];
 
 const BLOCKED_5 = [{s:11*60+30,e:12*60+30},{s:15*60,e:16*60},{s:19*60,e:19*60+30}];
 const START=9*60, END=20*60, SLOT=45;
-const DAYS_SHORT=["Lun","Mar","Mié","Jue","Vie"];
+const DAYS_SHORT=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
 let currentMonday = getMonday(new Date());
 let currentDespacho = 2;
@@ -140,10 +142,15 @@ function fmtDisplay(d){return d.toLocaleDateString('es-ES',{day:'2-digit',month:
 function isToday(d){return fmtDate(d)===fmtDate(new Date())}
 function timeStr(m){return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`}
 function slotKey(despacho,dayIdx,slotIdx){return `${despacho}_${fmtDate(addDays(currentMonday,dayIdx))}_${slotIdx}`}
-function isBlocked(despacho,slotIdx){
+function isBlocked(despacho,slotIdx,dayIdx){
   if(despacho!==5) return false;
   const sm=START+slotIdx*SLOT, em=sm+SLOT;
-  return BLOCKED_5.some(b=>sm<b.e&&em>b.s);
+  // Descansos diarios
+  if(BLOCKED_5.some(b=>sm<b.e&&em>b.s)) return 'descanso';
+  // Reunión de equipo todos los martes 11:30-15:00
+  const d=addDays(currentMonday,dayIdx);
+  if(d.getDay()===2 && sm<15*60 && em>11*60+30) return 'reunion';
+  return false;
 }
 function profIndex(codigo){return PROFESIONALES.findIndex(p=>p.codigo===codigo)}
 
@@ -161,7 +168,7 @@ async function apiPost(body){
 }
 async function loadWeek(){
   loading=true; renderGrid();
-  const monday=fmtDate(currentMonday), friday=fmtDate(addDays(currentMonday,4));
+  const monday=fmtDate(currentMonday), friday=fmtDate(addDays(currentMonday,6));
   try{
     const data=await apiGet({despacho:currentDespacho,monday,friday});
     bookings={};
@@ -217,21 +224,24 @@ function renderGrid(){
     return;
   }
   let html=`<tr><th class="tc"></th>`;
-  for(let i=0;i<5;i++){
+  for(let i=0;i<7;i++){
     const d=addDays(currentMonday,i);
     const td=isToday(d)?' today-th':'';
-    html+=`<th class="${td}">${DAYS_SHORT[i]}<br>${fmtDisplay(d)}</th>`;
+    const weekend=i>=5?' style="background:#f5f0e8"':'';
+    html+=`<th class="${td}" ${weekend}>${DAYS_SHORT[i]}<br>${fmtDisplay(d)}</th>`;
   }
   html+=`</tr>`;
   slots.forEach((m,si)=>{
     html+=`<tr><td class="time">${timeStr(m)}</td>`;
-    for(let di=0;di<5;di++){
+    for(let di=0;di<7;di++){
       const d=addDays(currentMonday,di);
       const tc=isToday(d)?' today-col':'';
       const key=slotKey(currentDespacho,di,si);
       const bk=bookings[key];
-      if(isBlocked(currentDespacho,si)){
-        html+=`<td class="blocked${tc}"></td>`;
+      const blockType=isBlocked(currentDespacho,si,di);
+      if(blockType){
+        const label=blockType==='reunion'?'reunión equipo':'descanso';
+        html+=`<td class="blocked${tc}" data-label="${label}"></td>`;
       } else if(bk){
         const pi=profIndex(bk.prof);
         const c=PCOLORS[pi>=0?pi%PCOLORS.length:0];
